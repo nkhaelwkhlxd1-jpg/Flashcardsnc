@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ตู้บัตรกฎหมาย</title>
+<!--
+  วิธี deploy (เหมือน AlphaCount):
+  1) สร้างโปรเจกต์ Firebase ใหม่ (แยกจากโปรเจกต์ alpha-a0554 ของ AlphaCount เพื่อไม่ให้ข้อมูลปนกัน)
+     - เปิด Realtime Database โหมด "start in locked mode" ก็ได้ ค่อยวาง rules ทับทีหลัง
+     - เปิด Authentication > Sign-in method > Email/Password ให้ Enable
+     - ไปที่ Authentication > Users > Add user ใส่อีเมล/รหัสผ่านของผู้ขาย (ใช้ login เข้าแผงควบคุม)
+  2) คัดลอกค่า firebaseConfig จาก Project settings มาแทนที่ก้อนด้านล่างในไฟล์นี้ (บรรทัดที่เขียนว่า "วางค่าจาก Firebase Console")
+  3) วาง Security Rules นี้ใน Realtime Database > Rules:
+     {
+       "rules": {
+         "sets": { ".read": true, ".write": "auth != null" },
+         "links": {
+           ".read": "auth != null",
+           ".write": "auth != null",
+           "$code": { ".read": true }
+         }
+       }
+     }
+  4) push ไฟล์นี้ขึ้น repo GitHub แล้วเปิด GitHub Pages เหมือนที่ทำกับ AlphaCount
+  หมายเหตุด้านความปลอดภัย: รหัสที่สร้างให้แต่ละคนช่วยกันคนทั่วไปเข้าดูเฉย ๆ และช่วยตามรอย/ปิดสิทธิ์ได้
+  แต่ "sets" อ่านได้แบบเปิด (เพื่อให้หน้าแรกโหลดรายวิชาได้) เนื้อหาบัตรจึงไม่ใช่การเข้ารหัสระดับสูง
+  ถ้าต้องการล็อกเนื้อหาบัตรแบบแน่นหนาจริง ๆ จะต้องมี backend แยก (Cloud Functions) เพิ่มเติม
+-->
+<style>
+:root{
+  --paper:#fafaf9; --paper-2:#f5f5f4; --ink:#1c1917; --ink-soft:#57534e; --ink-faint:#78716c;
+  --border:#e7e5e4; --border-2:#d6d3d1; --amber:#d97706; --amber-2:#b45309; --amber-soft:#fffbeb;
+  --amber-border:#fcd34d; --amber-deep:#92400e; --green-bg:#dcfce7; --green-text:#15803d;
+  --red-bg:#fee2e2; --red-text:#b91c1c;
+}
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@500;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap');
+*{box-sizing:border-box;}
+body{margin:0;font-family:'Noto Sans Thai',sans-serif;background:var(--paper);color:var(--ink);}
+.font-display{font-family:'Noto Serif Thai',serif;}
+.shell{min-height:100vh;display:flex;flex-direction:column;}
+.wrap{max-width:640px;margin:0 auto;width:100%;padding:0 20px;}
+.header{border-bottom:1px solid var(--border);padding:24px 0;}
+.row{display:flex;align-items:center;gap:12px;}
+.title-lg{font-size:26px;color:var(--ink);margin:0;letter-spacing:.3px;}
+.muted{color:var(--ink-faint);font-size:12px;margin:2px 0 0;}
+.bar{border-bottom:1px solid var(--border);background:var(--paper-2);padding:18px 0;}
+.input{width:100%;background:#fff;border:1px solid var(--border-2);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--ink);outline:none;font-family:inherit;}
+.input:focus{border-color:var(--amber);}
+.code-row{display:flex;gap:8px;flex-wrap:wrap;}
+.code-box{flex:1;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border-2);border-radius:8px;padding:9px 11px;min-width:200px;}
+.code-box input{border:none;outline:none;flex:1;font-size:14px;letter-spacing:2px;text-transform:uppercase;font-family:inherit;background:transparent;color:var(--ink);}
+.btn{border:none;border-radius:8px;font-size:14px;font-weight:500;padding:10px 18px;cursor:pointer;font-family:inherit;}
+.btn-primary{background:var(--amber);color:var(--ink);}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+.btn-ghost{background:transparent;color:var(--ink-soft);text-decoration:underline;padding:6px 0;font-size:13px;}
+.btn-icon{background:transparent;border:1px solid var(--border-2);border-radius:999px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft);}
+.btn-icon:disabled{opacity:.3;cursor:not-allowed;}
+.main{flex:1;padding:24px 0;}
+.subject{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff;margin-bottom:14px;}
+.subject-head{width:100%;background:none;border:none;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;font-family:inherit;}
+.subject-name{font-family:'Noto Serif Thai',serif;font-size:17px;color:var(--ink);}
+.code-tag{color:var(--amber-2);font-family:monospace;font-size:11px;border:1px solid var(--amber-border);border-radius:5px;padding:2px 6px;}
+.set-row{display:flex;gap:14px;padding:16px 18px;border-top:1px solid var(--border);}
+.seal{flex-shrink:0;width:48px;height:48px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 32% 28%,#b1453d,#5e1a17);border:2px solid #c9a24b;color:#fff7e6;font-weight:700;font-size:13px;font-family:'Noto Serif Thai',serif;box-shadow:inset 0 0 0 2px rgba(201,162,75,.35);}
+.seal.lg{width:64px;height:64px;font-size:15px;}
+.set-title{font-weight:500;font-size:15px;margin:0;}
+.set-desc{color:var(--ink-soft);font-size:13px;margin:5px 0 0;}
+.set-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--ink-faint);margin-top:8px;}
+.footer{border-top:1px solid var(--border);padding:16px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--ink-faint);}
+.flip-outer{width:100%;max-width:380px;height:240px;margin:0 auto;perspective:1200px;cursor:pointer;}
+.flip-inner{position:relative;width:100%;height:100%;transition:transform .5s;transform-style:preserve-3d;}
+.flip-inner.flipped{transform:rotateY(180deg);}
+.flip-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#f8f3e7;color:#1c1a14;border:1px solid #c9a24b;overflow:hidden;text-align:center;padding:0 20px;}
+.flip-face.back{transform:rotateY(180deg);}
+.flip-hint{position:absolute;bottom:10px;right:14px;font-size:11px;color:#a89c84;z-index:2;}
+.watermark-layer{position:absolute;inset:-20%;display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);transform:rotate(-22deg);opacity:.16;pointer-events:none;z-index:0;}
+.watermark-text{font-size:11px;font-weight:600;color:#6e1f1c;white-space:nowrap;display:flex;align-items:center;justify-content:center;}
+@media(prefers-reduced-motion:reduce){.flip-inner{transition:none;}}
+.center-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px;text-align:center;}
+.tabs{display:flex;gap:8px;padding:16px 0 0;}
+.tab{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:500;border:1px solid var(--border);background:var(--paper-2);color:var(--ink-soft);cursor:pointer;font-family:inherit;}
+.tab.active{background:var(--amber);color:var(--ink);border-color:var(--amber);}
+.panel{border:1px solid var(--border);border-radius:12px;padding:16px;background:#fff;}
+.field{display:block;margin-bottom:10px;}
+.field-label{font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.card-row{border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;gap:8px;margin-bottom:8px;}
+.card-row .stack{flex:1;display:flex;flex-direction:column;gap:6px;}
+.list-item{border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;background:#fff;}
+.badge{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:500;}
+.badge.active{background:var(--green-bg);color:var(--green-text);}
+.badge.revoked{background:var(--red-bg);color:var(--red-text);}
+.small{font-size:12px;color:var(--ink-faint);}
+.mono{font-family:monospace;}
+a.icon-link, .iconbtn{color:var(--ink-soft);cursor:pointer;background:none;border:none;padding:2px;}
+.created-box{background:var(--amber-soft);border:1px solid var(--amber-border);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;font-size:13px;color:var(--amber-deep);}
+.loginbox{width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px;}
+.errtxt{color:var(--red-text);font-size:12px;margin:0;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+// ----- 1) วางค่า Firebase Config ของคุณตรงนี้ -----
+const firebaseConfig = {
+  apiKey: "วางค่าจาก Firebase Console",
+  authDomain: "วางค่าจาก Firebase Console",
+  databaseURL: "วางค่าจาก Firebase Console",
+  projectId: "วางค่าจาก Firebase Console",
+  storageBucket: "วางค่าจาก Firebase Console",
+  messagingSenderId: "วางค่าจาก Firebase Console",
+  appId: "วางค่าจาก Firebase Console",
+};
+const CONFIG_NOT_SET = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("วางค่า");
+let db, auth;
+if (!CONFIG_NOT_SET) {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    auth = firebase.auth();
+  } catch (e) {
+    document.getElementById("app").innerHTML =
+      '<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;font-family:sans-serif;">' +
+      '<p style="font-weight:600;">เชื่อมต่อ Firebase ไม่สำเร็จ</p>' +
+      '<p style="color:#78716c;font-size:13px;max-width:320px;">ตรวจสอบว่าวางค่า firebaseConfig ถูกต้องครบทุกช่อง และเปิด Realtime Database ไว้แล้วในโปรเจกต์ Firebase</p>' +
+      '<pre style="font-size:11px;color:#b91c1c;white-space:pre-wrap;max-width:320px;">' + (e && e.message ? e.message : e) + '</pre>' +
+      "</div>";
+    throw e;
+  }
+}
+
+// ----- 2) state -----
+const state = {
+  route: parseHash(),
+  sets: {},      // { setId: {...} }
+  links: {},     // { code: {...} }  -- เฉพาะที่แอดมิน login แล้วจะเห็นครบ
+  user: null,
+  formOpen: false, // true เมื่อมีฟอร์มแก้ไขชุดบัตรเปิดอยู่ (กันไม่ให้ re-render ทับตอนพิมพ์)
+  draftSet: null,
+  loginErr: "",
+  codeErr: "",
+  adminTab: "sets",
+};
+
+function parseHash() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  if (raw.startsWith("v/")) return { page: "viewer", code: decodeURIComponent(raw.slice(2)).toUpperCase() };
+  if (raw.startsWith("p/")) return { page: "preview", setId: decodeURIComponent(raw.slice(2)) };
+  if (raw === "admin") return { page: "admin" };
+  return { page: "catalog" };
+}
+window.addEventListener("hashchange", () => { state.route = parseHash(); state.codeErr=""; render(); });
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function uid() { return Math.random().toString(36).slice(2, 10); }
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function genCode(existingLinks) {
+  let code;
+  do {
+    code = Array.from({ length: 7 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
+  } while (existingLinks && existingLinks[code]);
+  return code;
+}
+
+// ----- 3) Firebase listeners -----
+if (!CONFIG_NOT_SET) {
+  db.ref("sets").on("value", (snap) => {
+    state.sets = snap.val() || {};
+    if (!state.formOpen) render();
+  });
+  auth.onAuthStateChanged((user) => {
+    state.user = user;
+    if (user) {
+      db.ref("links").on("value", (snap) => { state.links = snap.val() || {}; if (!state.formOpen) render(); });
+    } else {
+      db.ref("links").off();
+      state.links = {};
+    }
+    render();
+  });
+}
+// สำหรับผู้เข้าดูที่ไม่ได้ login: ดึงลิงก์เฉพาะรหัสที่ระบุตอนเปิดหน้า viewer (ดูฟังก์ชัน loadPublicLink)
+function loadPublicLink(code, cb) {
+  db.ref("links/" + code).once("value").then((snap) => cb(snap.val())).catch(() => cb(null));
+}
+
+function goCatalog() { location.hash = ""; }
+function goAdmin() { location.hash = "#/admin"; }
+function setAdminTab(t) { state.adminTab = t; render(); }
+
+// ----- 4) Auth actions -----
+function doLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById("login-email").value.trim();
+  const pass = document.getElementById("login-pass").value;
+  state.loginErr = "";
+  auth.signInWithEmailAndPassword(email, pass).catch((err) => {
+    state.loginErr = "เข้าสู่ระบบไม่สำเร็จ ตรวจอีเมล/รหัสผ่านอีกครั้ง";
+    render();
+  });
+}
+function doLogout() { auth.signOut(); goCatalog(); }
+
+// ----- 5) Sets CRUD -----
+function readSetFormFromDom() {
+  const cards = [];
+  document.querySelectorAll("#cardRows .card-row").forEach((row) => {
+    cards.push({
+      id: row.dataset.cid,
+      front: row.querySelector(".cf").value,
+      back: row.querySelector(".cb").value,
+      preview: row.querySelector(".cp").checked,
+    });
+  });
+  return {
+    id: state.draftSet?.id || null,
+    subjectCode: document.getElementById("f-subjectCode")?.value || "",
+    subjectName: document.getElementById("f-subjectName")?.value || "",
+    title: document.getElementById("f-title")?.value || "",
+    description: document.getElementById("f-description")?.value || "",
+    price: document.getElementById("f-price")?.value || "",
+    cards,
+  };
+}
+function startNewSet() {
+  state.formOpen = true;
+  state.draftSet = { id: null, subjectCode: "", subjectName: "", title: "", description: "", price: "", cards: [{ id: uid(), front: "", back: "", preview: false }] };
+  render();
+}
+function startEditSet(id) {
+  const s = state.sets[id];
+  if (!s) return;
+  const cardsArr = Object.entries(s.cards || {}).map(([cid, c]) => ({ id: cid, front: c.front, back: c.back, preview: !!c.preview }));
+  state.formOpen = true;
+  state.draftSet = { id, subjectCode: s.subjectCode, subjectName: s.subjectName, title: s.title, description: s.description, price: String(s.price), cards: cardsArr.length ? cardsArr : [{ id: uid(), front: "", back: "", preview: false }] };
+  render();
+}
+function cancelSetForm() { state.formOpen = false; state.draftSet = null; render(); }
+function addCardRow() { state.draftSet = readSetFormFromDom(); state.draftSet.cards.push({ id: uid(), front: "", back: "", preview: false }); render(); }
+function removeCardRow(i) { state.draftSet = readSetFormFromDom(); state.draftSet.cards.splice(i, 1); render(); }
+function saveSet() {
+  const f = readSetFormFromDom();
+  if (!f.subjectCode.trim() || !f.title.trim()) { alert("กรอกรหัสวิชาและชื่อชุดบัตรก่อนนะ"); return; }
+  const cardsObj = {};
+  f.cards.filter((c) => c.front.trim() || c.back.trim()).forEach((c) => { cardsObj[c.id || uid()] = { front: c.front.trim(), back: c.back.trim(), preview: !!c.preview }; });
+  const record = {
+    subjectCode: f.subjectCode.trim().toUpperCase(),
+    subjectName: f.subjectName.trim() || f.subjectCode.trim(),
+    title: f.title.trim(),
+    description: f.description.trim(),
+    price: Number(f.price) || 0,
+    cards: cardsObj,
+    createdAt: state.sets[f.id]?.createdAt || Date.now(),
+  };
+  const id = f.id || db.ref("sets").push().key;
+  db.ref("sets/" + id).set(record).then(() => {
+    state.formOpen = false; state.draftSet = null; render();
+  });
+}
+function removeSet(id) {
+  if (!confirm("ลบชุดบัตรนี้และลิงก์ทั้งหมดที่ผูกกับมันหรือไม่?")) return;
+  db.ref("sets/" + id).remove();
+  Object.entries(state.links || {}).forEach(([code, l]) => { if (l.setId === id) db.ref("links/" + code).remove(); });
+}
+
+// ----- 6) Links -----
+function createLink() {
+  const setId = document.getElementById("lk-set").value;
+  const recipient = document.getElementById("lk-recipient").value.trim();
+  const note = document.getElementById("lk-note").value.trim();
+  if (!setId || !recipient) return;
+  const code = genCode(state.links);
+  const record = { setId, recipientName: recipient, note, createdAt: Date.now(), revoked: false };
+  db.ref("links/" + code).set(record).then(() => {
+    state.justCreatedCode = code;
+    render();
+  });
+}
+function toggleRevoke(code) {
+  const l = state.links[code];
+  if (!l) return;
+  db.ref("links/" + code + "/revoked").set(!l.revoked);
+}
+function copyLink(code) {
+  const l = state.links[code];
+  const set = l ? state.sets[l.setId] : null;
+  const base = location.href.split("#")[0];
+  const text = `ลิงก์ดูชุดบัตร "${set?.title || ""}"\nรหัสเข้าดู: ${code}\nเปิดเว็บแล้วกรอกรหัสนี้ที่ช่อง "มีรหัสเข้าดูจากผู้ขายแล้ว?" หรือเปิดลิงก์: ${base}#/v/${code}`;
+  navigator.clipboard?.writeText(text).then(() => { flashCopied(code); }).catch(() => {});
+}
+function flashCopied(code) {
+  const el = document.querySelector(`[data-copy="${code}"]`);
+  if (el) { const old = el.textContent; el.textContent = "คัดลอกแล้ว"; setTimeout(() => { el.textContent = old; }, 1400); }
+}
+
+// ----- 7) Catalog interactions -----
+const openSubjects = {};
+function toggleSubject(code) { openSubjects[code] = !openSubjects[code]; render(); }
+function submitCode(e) {
+  e.preventDefault();
+  const v = document.getElementById("code-input").value.trim().toUpperCase();
+  if (!v) { state.codeErr = "กรอกรหัสก่อนนะ"; render(); return; }
+  location.hash = "#/v/" + v;
+}
+
+// ----- 8) Render -----
+function render() {
+  const el = document.getElementById("app");
+  const r = state.route;
+  if (r.page === "viewer") { renderViewerRoute(el, r.code); return; }
+  if (r.page === "preview") { renderPreviewRoute(el, r.setId); return; }
+  if (r.page === "admin") {
+    el.innerHTML = state.user ? renderAdminDashboard() : renderAdminLogin();
+    return;
+  }
+  el.innerHTML = renderCatalog();
+}
+
+function renderCatalog() {
+  const subjects = {};
+  Object.entries(state.sets).forEach(([id, s]) => {
+    const key = s.subjectCode;
+    if (!subjects[key]) subjects[key] = { code: s.subjectCode, name: s.subjectName, sets: [] };
+    subjects[key].sets.push({ id, ...s });
+  });
+  const subjList = Object.values(subjects);
+  return `
+  <div class="shell">
+    <header class="header"><div class="wrap row">
+      <div class="seal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff7e6" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+      <div><h1 class="title-lg font-display">ตู้บัตรกฎหมาย</h1><p class="muted">บัตรทบทวนรายมาตรา แยกตู้ตามวิชา</p></div>
+    </div></header>
+    <div class="bar"><div class="wrap">
+      <form class="code-row" onsubmit="submitCode(event)">
+        <div class="code-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          <input id="code-input" placeholder="มีรหัสเข้าดูจากผู้ขายแล้ว? กรอกที่นี่">
+        </div>
+        <button type="submit" class="btn btn-primary">เข้าดูชุดบัตร</button>
+      </form>
+      ${state.codeErr ? `<p class="errtxt" style="margin-top:8px;">${escapeHtml(state.codeErr)}</p>` : ""}
+    </div></div>
+    <main class="main"><div class="wrap">
+      ${subjList.length === 0 ? `<p class="small">ยังไม่มีวิชาในระบบ</p>` : subjList.map((subj) => `
+        <div class="subject">
+          <button class="subject-head" onclick="toggleSubject('${subj.code}')">
+            <div class="row"><span class="code-tag mono">${escapeHtml(subj.code)}</span>
+              <span class="subject-name font-display">${escapeHtml(subj.name)}</span>
+              <span class="small">${subj.sets.length} ชุด</span></div>
+            <span>${openSubjects[subj.code] ? "▾" : "▸"}</span>
+          </button>
+          ${openSubjects[subj.code] ? subj.sets.map((s) => `
+            <div class="set-row">
+              <div class="seal">${s.price}฿</div>
+              <div style="flex:1;">
+                <p class="set-title">${escapeHtml(s.title)}</p>
+                <p class="set-desc">${escapeHtml(s.description)}</p>
+                <div class="set-meta">
+                  <span>${Object.keys(s.cards || {}).length} บัตร</span>
+                  ${(() => { const pc = Object.values(s.cards || {}).filter((c) => c.preview).length; return pc > 0 ? `<a class="btn-ghost" style="cursor:pointer" onclick="location.hash='#/p/${s.id}'">ลองดูตัวอย่าง (${pc} ใบ)</a>` : ""; })()}
+                </div>
+              </div>
+            </div>`).join("") : ""}
+        </div>`).join("")}
+    </div></main>
+    <footer class="footer"><div class="wrap row" style="justify-content:space-between;">
+      <span>เปิดดูเนื้อหาบัตรได้เฉพาะผู้มีรหัสจากผู้ขายเท่านั้น</span>
+      <a class="btn-ghost" style="cursor:pointer" onclick="goAdmin()">สำหรับผู้ขาย</a>
+    </div></footer>
+  </div>`;
+}
+
+function renderViewerRoute(el, code) {
+  el.innerHTML = `<div class="shell"><div class="center-screen"><div class="seal lg"><span style="font-size:11px">…</span></div><p class="small">กำลังตรวจสอบรหัส…</p></div></div>`;
+  loadPublicLink(code, (link) => {
+    if (!link || link.revoked) {
+      el.innerHTML = renderLocked(!link ? "ไม่พบรหัสนี้ในระบบ" : "ผู้ขายปิดการใช้งานลิงก์นี้แล้ว");
+      return;
+    }
+    db.ref("sets/" + link.setId).once("value").then((snap) => {
+      const set = snap.val();
+      if (!set) { el.innerHTML = renderLocked("ชุดบัตรนี้ถูกลบไปแล้ว"); return; }
+      viewerCtx = { set, cardsArr: Object.values(set.cards || {}), link, code, idx: 0 };
+      renderViewerPlayer();
+    });
+  });
+}
+function renderLocked(msg) {
+  return `<div class="shell"><div class="center-screen">
+    <div class="seal lg"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff7e6" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+    <h2 class="font-display" style="font-size:20px;margin:0;">เข้าดูไม่ได้</h2>
+    <p class="small" style="max-width:280px;">${escapeHtml(msg)}</p>
+    <button class="btn btn-primary" onclick="goCatalog()">กลับหน้าหลัก</button>
+  </div></div>`;
+}
+let viewerCtx = null;
+function viewerPrev() { if (viewerCtx && viewerCtx.idx > 0) { viewerCtx.idx--; renderViewerPlayer(); } }
+function viewerNext() { if (viewerCtx && viewerCtx.idx < viewerCtx.cardsArr.length - 1) { viewerCtx.idx++; renderViewerPlayer(); } }
+function renderViewerPlayer() {
+  const el = document.getElementById("app");
+  const { set, cardsArr, link, code, idx } = viewerCtx;
+  const card = cardsArr[idx];
+  const watermarkText = `${link.recipientName || "ผู้รับ"} • ${code}`;
+  const watermarkHtml = Array.from({ length: 6 }).map(() => `<span class="watermark-text">${escapeHtml(watermarkText)}</span>`).join("");
+  el.innerHTML = `<div class="shell">
+    <header class="header" style="padding:16px 0;"><div class="wrap row" style="justify-content:space-between;">
+      <a class="btn-ghost" style="cursor:pointer" onclick="goCatalog()">← หน้าหลัก</a>
+      <span class="small" style="color:#92400e;">✓ เข้าดูถูกต้อง</span>
+    </div></header>
+    <main class="center-screen">
+      <div><p class="small mono" style="color:#b45309;text-align:center;">${escapeHtml(set.subjectCode)}</p>
+        <h2 class="font-display" style="font-size:19px;margin:4px 0 0;text-align:center;">${escapeHtml(set.title)}</h2></div>
+      ${card ? `
+      <div class="flip-outer" onclick="this.querySelector('.flip-inner').classList.toggle('flipped')">
+        <div class="flip-inner">
+          <div class="flip-face"><div class="watermark-layer">${watermarkHtml}</div>
+            <p class="font-display" style="font-size:19px;position:relative;z-index:1;">${escapeHtml(card.front)}</p>
+            <span class="flip-hint">แตะเพื่อดูคำตอบ</span></div>
+          <div class="flip-face back"><div class="watermark-layer">${watermarkHtml}</div>
+            <p style="font-size:15px;position:relative;z-index:1;">${escapeHtml(card.back)}</p>
+            <span class="flip-hint">แตะเพื่อดูคำถาม</span></div>
+        </div>
+      </div>
+      <div class="row" style="justify-content:center;gap:16px;">
+        <button class="btn-icon" ${idx === 0 ? "disabled" : ""} onclick="viewerPrev()">‹</button>
+        <span class="small">บัตรที่ ${idx + 1} / ${cardsArr.length}</span>
+        <button class="btn-icon" ${idx === cardsArr.length - 1 ? "disabled" : ""} onclick="viewerNext()">›</button>
+      </div>` : `<p class="small">ชุดนี้ยังไม่มีบัตร</p>`}
+    </main>
+    <footer class="footer" style="justify-content:center;"><span>เข้าดูในนามของ ${escapeHtml(link.recipientName || "—")} · ห้ามนำไปเผยแพร่ต่อ</span></footer>
+  </div>`;
+}
+
+// ----- ตัวอย่างก่อนซื้อ (เปิดให้ดูได้โดยไม่ต้องมีรหัส) -----
+function renderPreviewRoute(el, setId) {
+  el.innerHTML = `<div class="shell"><div class="center-screen"><p class="small">กำลังโหลดตัวอย่าง…</p></div></div>`;
+  db.ref("sets/" + setId).once("value").then((snap) => {
+    const set = snap.val();
+    if (!set) { el.innerHTML = renderLocked("ไม่พบชุดบัตรนี้ หรือถูกลบไปแล้ว"); return; }
+    const previewCards = Object.values(set.cards || {}).filter((c) => c.preview);
+    if (previewCards.length === 0) { el.innerHTML = renderLocked("ชุดนี้ยังไม่มีตัวอย่างให้ลองดู"); return; }
+    previewCtx = { set, cardsArr: previewCards, idx: 0 };
+    renderPreviewPlayer();
+  });
+}
+let previewCtx = null;
+function previewPrev() { if (previewCtx && previewCtx.idx > 0) { previewCtx.idx--; renderPreviewPlayer(); } }
+function previewNext() { if (previewCtx && previewCtx.idx < previewCtx.cardsArr.length - 1) { previewCtx.idx++; renderPreviewPlayer(); } }
+function renderPreviewPlayer() {
+  const el = document.getElementById("app");
+  const { set, cardsArr, idx } = previewCtx;
+  const card = cardsArr[idx];
+  el.innerHTML = `<div class="shell">
+    <header class="header" style="padding:16px 0;"><div class="wrap row" style="justify-content:space-between;">
+      <a class="btn-ghost" style="cursor:pointer" onclick="goCatalog()">← หน้าหลัก</a>
+      <span class="small" style="color:#b45309;">ตัวอย่างก่อนซื้อ</span>
+    </div></header>
+    <main class="center-screen">
+      <div><p class="small mono" style="color:#b45309;text-align:center;">${escapeHtml(set.subjectCode)}</p>
+        <h2 class="font-display" style="font-size:19px;margin:4px 0 0;text-align:center;">${escapeHtml(set.title)}</h2>
+        <p class="small" style="text-align:center;margin-top:4px;">ดูได้ ${cardsArr.length} ใบจากทั้งหมด ${Object.keys(set.cards || {}).length} ใบ · ${set.price}฿ ต่อชุดเต็ม</p></div>
+      <div class="flip-outer" onclick="this.querySelector('.flip-inner').classList.toggle('flipped')">
+        <div class="flip-inner">
+          <div class="flip-face">
+            <p class="font-display" style="font-size:19px;">${escapeHtml(card.front)}</p>
+            <span class="flip-hint">แตะเพื่อดูคำตอบ</span></div>
+          <div class="flip-face back">
+            <p style="font-size:15px;">${escapeHtml(card.back)}</p>
+            <span class="flip-hint">แตะเพื่อดูคำถาม</span></div>
+        </div>
+      </div>
+      <div class="row" style="justify-content:center;gap:16px;">
+        <button class="btn-icon" ${idx === 0 ? "disabled" : ""} onclick="previewPrev()">‹</button>
+        <span class="small">ตัวอย่างที่ ${idx + 1} / ${cardsArr.length}</span>
+        <button class="btn-icon" ${idx === cardsArr.length - 1 ? "disabled" : ""} onclick="previewNext()">›</button>
+      </div>
+      <div class="row" style="justify-content:center;gap:8px;flex-direction:column;align-items:center;">
+        <p class="small">ชอบไหม? ทักผู้ขายเพื่อขอรหัสเข้าดูชุดเต็มได้เลย</p>
+        <a class="btn-ghost" style="cursor:pointer" onclick="goCatalog()">กลับไปดูวิชาอื่น</a>
+      </div>
+    </main>
+  </div>`;
+}
+
+function renderAdminLogin() {
+  return `<div class="shell"><div class="center-screen">
+    <div class="seal lg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff7e6" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+    <h2 class="font-display" style="font-size:20px;margin:0;">โซนผู้ขาย</h2>
+    <form class="loginbox" onsubmit="doLogin(event)">
+      <input id="login-email" class="input" type="email" placeholder="อีเมลผู้ขาย" required>
+      <input id="login-pass" class="input" type="password" placeholder="รหัสผ่าน" required>
+      ${state.loginErr ? `<p class="errtxt">${escapeHtml(state.loginErr)}</p>` : ""}
+      <button class="btn btn-primary" type="submit">เข้าสู่ระบบ</button>
+    </form>
+    <a class="btn-ghost" style="cursor:pointer" onclick="goCatalog()">กลับหน้าหลัก</a>
+  </div></div>`;
+}
+
+function renderAdminDashboard() {
+  return `<div class="shell">
+    <header class="header"><div class="wrap row" style="justify-content:space-between;">
+      <h1 class="font-display" style="font-size:18px;margin:0;">แผงควบคุมผู้ขาย</h1>
+      <div class="row" style="gap:14px;">
+        <a class="btn-ghost" style="cursor:pointer" onclick="doLogout()">ออกจากระบบ</a>
+        <a class="btn-ghost" style="cursor:pointer" onclick="goCatalog()">ดูหน้าร้าน</a>
+      </div>
+    </div></header>
+    <div class="wrap tabs">
+      <button class="tab ${state.adminTab === 'sets' ? 'active' : ''}" onclick="setAdminTab('sets')">ชุดบัตร</button>
+      <button class="tab ${state.adminTab === 'links' ? 'active' : ''}" onclick="setAdminTab('links')">ลิงก์แชร์</button>
+    </div>
+    <main class="main"><div class="wrap">
+      ${state.adminTab === "sets" ? renderManageSets() : renderManageLinks()}
+    </div></main>
+  </div>`;
+}
+
+function renderManageSets() {
+  if (state.formOpen && state.draftSet) {
+    const f = state.draftSet;
+    const subjCodes = [...new Set(Object.values(state.sets).map((s) => s.subjectCode))];
+    return `
+    <div style="max-width:480px;">
+      <div class="grid2">
+        <label class="field"><span class="field-label">รหัสวิชา</span>
+          <input id="f-subjectCode" class="input" list="subj-codes" value="${escapeHtml(f.subjectCode)}" placeholder="LAW3101">
+          <datalist id="subj-codes">${subjCodes.map((c) => `<option value="${escapeHtml(c)}">`).join("")}</datalist>
+        </label>
+        <label class="field"><span class="field-label">ชื่อวิชา</span>
+          <input id="f-subjectName" class="input" value="${escapeHtml(f.subjectName)}" placeholder="กฎหมายอาญา 3"></label>
+      </div>
+      <label class="field"><span class="field-label">ชื่อชุดบัตร</span>
+        <input id="f-title" class="input" value="${escapeHtml(f.title)}" placeholder="ความผิดต่อชีวิตและร่างกาย"></label>
+      <label class="field"><span class="field-label">คำอธิบายสั้น ๆ</span>
+        <textarea id="f-description" class="input" style="min-height:60px;">${escapeHtml(f.description)}</textarea></label>
+      <label class="field" style="max-width:140px;"><span class="field-label">ราคา (บาท)</span>
+        <input id="f-price" class="input" type="number" value="${escapeHtml(f.price)}"></label>
+      <div class="row" style="justify-content:space-between;margin:14px 0 4px;">
+        <span class="field-label" style="margin:0;">บัตรคำถาม–คำตอบ</span>
+        <a class="btn-ghost" style="cursor:pointer" onclick="addCardRow()">+ เพิ่มบัตร</a>
+      </div>
+      <p class="small" style="margin:0 0 8px;">ติ๊ก "ตัวอย่าง" ที่บัตรไหนก็ได้ เพื่อให้คนทั่วไปลองดูฟรีก่อนซื้อ</p>
+      <div id="cardRows">
+        ${f.cards.map((c, i) => `
+        <div class="card-row" data-cid="${c.id}">
+          <div class="stack">
+            <input class="input cf" placeholder="หน้าบัตร #${i + 1} (คำถาม/มาตรา)" value="${escapeHtml(c.front)}">
+            <input class="input cb" placeholder="หลังบัตร (คำตอบ)" value="${escapeHtml(c.back)}">
+            <label class="row small" style="gap:6px;cursor:pointer;">
+              <input type="checkbox" class="cp" ${c.preview ? "checked" : ""}> ตัวอย่าง (ดูฟรีก่อนซื้อ)
+            </label>
+          </div>
+          <button class="iconbtn" onclick="removeCardRow(${i})">✕</button>
+        </div>`).join("")}
+      </div>
+      <div class="row" style="gap:8px;margin-top:10px;">
+        <button class="btn btn-primary" onclick="saveSet()">บันทึก</button>
+        <button class="btn btn-ghost" onclick="cancelSetForm()">ยกเลิก</button>
+      </div>
+    </div>`;
+  }
+  const entries = Object.entries(state.sets);
+  return `
+    <button class="btn btn-primary" onclick="startNewSet()">+ เพิ่มชุดบัตรใหม่</button>
+    <div style="margin-top:14px;">
+      ${entries.length === 0 ? `<p class="small">ยังไม่มีชุดบัตร</p>` : entries.map(([id, s]) => `
+      <div class="list-item">
+        <div style="min-width:0;">
+          <p class="small mono" style="color:#b45309;">${escapeHtml(s.subjectCode)} · ${escapeHtml(s.subjectName)}</p>
+          <p style="font-size:14px;margin:2px 0;">${escapeHtml(s.title)}</p>
+          <p class="small">${Object.keys(s.cards || {}).length} บัตร · ${s.price}฿</p>
+        </div>
+        <div class="row" style="gap:10px;flex-shrink:0;">
+          <a class="btn-ghost" style="cursor:pointer" onclick="startEditSet('${id}')">แก้ไข</a>
+          <a class="btn-ghost" style="cursor:pointer;color:#b91c1c;" onclick="removeSet('${id}')">ลบ</a>
+        </div>
+      </div>`).join("")}
+    </div>`;
+}
+
+function renderManageLinks() {
+  const setEntries = Object.entries(state.sets);
+  const linkEntries = Object.entries(state.links || {}).sort((a, b) => (b[1].createdAt||0) - (a[1].createdAt||0));
+  return `
+    <div class="panel" style="max-width:420px;">
+      <p class="small" style="margin-top:0;">สร้างลิงก์ใหม่ให้คนใดคนหนึ่ง</p>
+      <select id="lk-set" class="input" style="margin-bottom:8px;">
+        ${setEntries.map(([id, s]) => `<option value="${id}">${escapeHtml(s.subjectCode)} · ${escapeHtml(s.title)}</option>`).join("")}
+      </select>
+      <input id="lk-recipient" class="input" placeholder="ชื่อ/ชื่อเล่นผู้รับ" style="margin-bottom:8px;">
+      <input id="lk-note" class="input" placeholder="โน้ตส่วนตัว (ไม่บังคับ)" style="margin-bottom:10px;">
+      <button class="btn btn-primary" onclick="createLink()">สร้างลิงก์</button>
+      ${state.justCreatedCode ? `
+      <div class="created-box">
+        <span class="mono" style="letter-spacing:2px;">${state.justCreatedCode}</span>
+        <button class="iconbtn" data-copy="${state.justCreatedCode}" onclick="copyLink('${state.justCreatedCode}')">คัดลอก</button>
+      </div>` : ""}
+    </div>
+    <div style="margin-top:18px;">
+      <p class="small">ลิงก์ทั้งหมด (${linkEntries.length})</p>
+      ${linkEntries.length === 0 ? `<p class="small">ยังไม่มีลิงก์ที่สร้าง</p>` : linkEntries.map(([code, l]) => `
+      <div class="list-item">
+        <div style="min-width:0;">
+          <p style="font-size:14px;margin:0;">${escapeHtml(l.recipientName)} <span class="small">· ${escapeHtml(state.sets[l.setId]?.title || "(ลบแล้ว)")}</span></p>
+          <p class="small mono">${code} · ${new Date(l.createdAt).toLocaleDateString("th-TH")}</p>
+        </div>
+        <div class="row" style="gap:8px;flex-shrink:0;">
+          <span class="badge ${l.revoked ? "revoked" : "active"}">${l.revoked ? "ปิดแล้ว" : "ใช้งานได้"}</span>
+          <button class="iconbtn" data-copy="${code}" onclick="copyLink('${code}')">คัดลอก</button>
+          <button class="iconbtn" onclick="toggleRevoke('${code}')">${l.revoked ? "เปิด" : "ปิด"}</button>
+        </div>
+      </div>`).join("")}
+    </div>`;
+}
+
+if (CONFIG_NOT_SET) {
+  document.getElementById("app").innerHTML =
+    '<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;font-family:sans-serif;">' +
+    '<p style="font-weight:600;">ยังไม่ได้ตั้งค่า Firebase</p>' +
+    '<p style="color:#78716c;font-size:13px;max-width:320px;line-height:1.6;">หน้านี้จะใช้งานได้เมื่อวางค่า firebaseConfig จริงของคุณแทนที่ข้อความ "วางค่าจาก Firebase Console" ในไฟล์ ดูขั้นตอนได้ที่คอมเมนต์บนสุดของไฟล์<br><br>หมายเหตุ: ต่อให้วางค่าแล้ว หน้าพรีวิวในแชทนี้อาจยังเชื่อมต่อ Firebase ไม่ได้ เพราะถูกจำกัดการเชื่อมต่อเครือข่ายภายนอก — ต้อง deploy ขึ้น GitHub Pages จริงก่อนถึงจะทำงานสมบูรณ์</p>' +
+    "</div>";
+} else {
+  render();
+}
+</script>
+</body>
+</html>
